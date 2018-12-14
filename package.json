@@ -9,8 +9,10 @@
   "author": "Elton H. Faust",
   "license": "ISC",
   "dependencies": {
+    "opn": "^5.4.0",
     "robotjs": "^0.5.1",
-    "usb": "^1.5.0"
+    "usb": "^1.5.0",
+    "yargs": "^12.0.5"
   },
   "devDependencies": {}
 }

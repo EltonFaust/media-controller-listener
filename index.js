@@ -3,83 +3,159 @@
 // https://www.npmjs.com/package/usb-detection
 // const usbDetect = require('usb-detection');
 
-
 const robot = require("robotjs");
 const usb   = require('usb');
+const opn   = require('opn');
+// const spawn = require('child_process').spawn;
 
-// console.log(usb.getDeviceList());
+const { verbose } = require('yargs')
+    .count('verbose')
+    .alias('v', 'verbose')
+    .argv;
+
+// console.log(process.platform);
+// process.exit(0);
+
+const actionList = {
+    0x01: () => robot.keyTap("audio_play"),
+    0x02: () => robot.keyTap("audio_stop"),
+    0x03: () => robot.keyTap("audio_prev"),
+    0x04: () => robot.keyTap("audio_next"),
+    0x05: () => robot.keyTap("audio_mute"),
+    0x06: () => robot.keyTap("audio_vol_down"),
+    0x07: () => robot.keyTap("audio_vol_up"),
+
+    0x10: () => opn('', { app: [ 'libreoffice', '--writer' ] }),
+    0x11: () => opn('', { app: [ 'libreoffice', '--calc' ] }),
+    0x12: () => opn('about:blank', { app: 'google-chrome' }),
+    0x13: () => opn('about:blank', { app: [ 'google-chrome', '--incognito' ] }),
+    0x14: () => opn('about:blank', { app: 'firefox' }),
+    0x15: () => opn('', { app: 'spotify' }),
+};
 
 let inEndpoint;
 let outEndpoint;
+let usedDeviceInfo;
 
-usb.on('attach', (device) => {
-    console.log(device)
+const allowedVendorDevices = {
+    0x2717: '*', // Xiaomi
+    // 0x2717: [],
+};
 
-    // device.open(true);
-    // device.interfaces[0].claim();
+const warn = (...args) => verbose >= 0 && console.log(...args);
+const info = (...args) => verbose >= 1 && console.log(...args);
+const debug = (...args) => verbose >= 2 && console.log(...args);
 
-    // for (let i = 0; i < device.interfaces[0].endpoints.length; i++) {
-    //     if (inEndpoint && outEndpoint) {
-    //         break;
-    //     }
+const analyzeAttachedDevice = (device) => {
+    const descriptior = device.deviceDescriptor;
 
-    //     if (device.interfaces[0].endpoints[i].direction == 'in') {
-    //         if (!inEndpoint) {
-    //             inEndpoint = device.interfaces[0].endpoints[i];
-    //         }
-    //     } else {
-    //         if (!inEndpoint) {
-    //             outEndpoint = device.interfaces[0].endpoints[i];
-    //         }
-    //     }
-    // }
+    debug(`Analyzing device on address ${('000' + device.deviceAddress).substr(-3)} -> (0x${descriptior.idVendor.toString(16)}:0x${descriptior.idProduct.toString(16)})`);
 
-    // device.interfaces[0].endpoints[0].startPoll(1, 8);
-    // device.interfaces[0].endpoints[0].on("data", (dataBuf) => {
+    if (usedDeviceInfo) {
+        debug('Some device already defined');
+        return false;
+    }
 
-    // });
+    const vendorList = allowedVendorDevices[descriptior.idVendor];
 
-    // device.interfaces[0].endpoints[0].transfer(data, (error) => {
-    //     console.log(error)
-    // })
-});
+    if (typeof vendorList === 'undefined' || (vendorList !== '*' && vendorList.indexOf(descriptior.idProduct) === -1)) {
+        debug('Device not found in allowed list');
+        return false;
+    }
 
-// usb.on('detach', (device) => {
-//     console.log(device)
-// });
+    device.open(true);
+    const interface = device.interface(0);
 
-// robot.keyTap("audio_play");
-// robot.keyTap("audio_stop");
-// robot.keyTap("audio_prev");
-// robot.keyTap("audio_next");
-// robot.keyTap("audio_mute");
-// robot.keyTap("audio_vol_down");
-// robot.keyTap("audio_vol_up");
+    if (!interface) {
+        debug('Interface not available for this device');
+        device.close();
+        return false;
+    }
 
+    inEndpoint = null;
+    outEndpoint = null;
 
-// const ks = require('node-key-sender');
+    interface.claim();
 
-// ks.sendKey('@1016');
+    for (let endpoint of interface.endpoints) {
+        if (inEndpoint && outEndpoint) {
+            break;
+        }
 
+        debug(`Verifying endpoint`);
 
-// usbDetect.startMonitoring();
+        if (endpoint.direction == 'in') {
+            if (!inEndpoint) {
+                debug('Endpoint set as input');
+                inEndpoint = endpoint;
+            }
+        } else {
+            if (!outEndpoint) {
+                debug('Endpoint set as output');
+                outEndpoint = endpoint;
+            }
+        }
+    }
 
-// usbDetect.find().then((err, devices) => {
-//     console.log(devices, err);
-//     usbDetect.stopMonitoring();
-// });
+    if (!inEndpoint || !outEndpoint) {
+        debug('Endpoint not set for input or output');
+        inEndpoint = null;
+        outEndpoint = null;
+        device.close();
+        return false;
+    }
 
-// usbDetect.on('add', (device) => {
-//     console.log(device);
-//     usbDetect.stopMonitoring();
-// });
+    inEndpoint.startPoll(1, 8);
+    inEndpoint.on('data', (dataBuf) => {
+        debug(`Received data "${dataBuf}"`);
 
+        if (typeof actionList[dataBuf] !== 'undefined') {
+            actionList[dataBuf]();
+        }
+    });
 
-// K_AUDIO_VOLUME_MUTE = 1007,
-// K_AUDIO_VOLUME_DOWN = 1001,
-// K_AUDIO_VOLUME_UP = 1000,
-// K_AUDIO_PLAY = 1016,
-// K_AUDIO_STOP = K_NOT_A_KEY,
-// K_AUDIO_PAUSE = 1016,
-// K_AUDIO_PREV = 1018,
-// K_AUDIO_NEXT = 1017,
+    usedDeviceInfo = {
+        addr: device.deviceAddress,
+        vendor: descriptior.idVendor,
+        product: descriptior.idProduct,
+    };
+
+    // manda uma mensagem pro dispositivo pra dizer que ativo
+    sendDataToDevice(0xff).then(() => {
+        info('Connection successfully established!');
+    }).catch((e) => {
+        inEndpoint = null;
+        outEndpoint = null;
+        inEndpoint.stopPoll();
+        device.close();
+        warn(e);
+    });
+
+    return true;
+};
+
+const analyzeDetachedDevice = (device) => {
+    if (usedDeviceInfo) {
+        const descriptior = device.deviceDescriptor;
+
+        if (usedDeviceInfo.addr === device.deviceAddress && usedDeviceInfo.vendor === descriptior.idVendor && usedDeviceInfo.product === descriptior.idProduct) {
+            usedDeviceInfo = null;
+            inEndpoint = null;
+            outEndpoint = null;
+        }
+    }
+};
+
+const sendDataToDevice = (data) => {
+    return new Promise((resolve, reject) => {
+        if (!usedDeviceInfo || !outEndpoint) {
+            return reject(new Error('USB device or output endpoint not defined'));
+        }
+
+        outEndpoint.transfer(data, error => (!error ? resolve() : reject(error)));
+    });
+};
+
+usb.on('attach', device => analyzeAttachedDevice(device));
+usb.on('detach', device => analyzeDetachedDevice(device));
+usb.getDeviceList().some(device => analyzeAttachedDevice(device));
