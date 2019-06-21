@@ -2,16 +2,24 @@
   "name": "media-controller-listener",
   "version": "1.0.0",
   "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EltonFaust/media-controller-listener.git"
+  },
+  "author": "Elton Faust",
+  "license": "Apache 2.0",
+  "bugs": {
+    "url": "https://github.com/EltonFaust/media-controller-listener/issues"
+  },
+  "homepage": "https://github.com/EltonFaust/media-controller-listener#readme",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js -vvvv"
   },
-  "author": "Elton H. Faust",
-  "license": "ISC",
   "dependencies": {
-    "opn": "^5.4.0",
+    "opn": "^5.5.0",
     "robotjs": "^0.5.1",
-    "usb": "^1.5.0",
+    "usb": "^1.6.0",
     "yargs": "^12.0.5"
   },
   "devDependencies": {}

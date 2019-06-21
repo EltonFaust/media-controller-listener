@@ -17,13 +17,12 @@ const { verbose } = require('yargs')
 // process.exit(0);
 
 const actionList = {
-    0x01: () => robot.keyTap("audio_play"),
-    0x02: () => robot.keyTap("audio_stop"),
-    0x03: () => robot.keyTap("audio_prev"),
-    0x04: () => robot.keyTap("audio_next"),
-    0x05: () => robot.keyTap("audio_mute"),
-    0x06: () => robot.keyTap("audio_vol_down"),
-    0x07: () => robot.keyTap("audio_vol_up"),
+    0x01: () => robot.keyTap("audio_play"),// play/pause
+    0x02: () => robot.keyTap("audio_prev"),
+    0x03: () => robot.keyTap("audio_next"),
+    0x04: () => robot.keyTap("audio_mute"),
+    0x05: () => robot.keyTap("audio_vol_down"),
+    0x06: () => robot.keyTap("audio_vol_up"),
 
     0x10: () => opn('', { app: [ 'libreoffice', '--writer' ] }),
     0x11: () => opn('', { app: [ 'libreoffice', '--calc' ] }),
@@ -42,9 +41,10 @@ const allowedVendorDevices = {
     // 0x2717: [],
 };
 
-const warn = (...args) => verbose >= 0 && console.log(...args);
-const info = (...args) => verbose >= 1 && console.log(...args);
-const debug = (...args) => verbose >= 2 && console.log(...args);
+const error = (...args) => verbose >= 1 && console.error(...args);
+const warn = (...args) => verbose >= 2 && console.warn(...args);
+const info = (...args) => verbose >= 3 && console.log(...args);
+const debug = (...args) => verbose >= 4 && console.log(...args);
 
 const analyzeAttachedDevice = (device) => {
     const descriptior = device.deviceDescriptor;
@@ -128,7 +128,7 @@ const analyzeAttachedDevice = (device) => {
         outEndpoint = null;
         inEndpoint.stopPoll();
         device.close();
-        warn(e);
+        error(e);
     });
 
     return true;
@@ -156,6 +156,7 @@ const sendDataToDevice = (data) => {
     });
 };
 
+usb.setDebugLevel(verbose);
 usb.on('attach', device => analyzeAttachedDevice(device));
 usb.on('detach', device => analyzeDetachedDevice(device));
 usb.getDeviceList().some(device => analyzeAttachedDevice(device));
